@@ -7,39 +7,39 @@ import (
 
 	"github.com/agent-api/core/types"
 
-	googGenAI "github.com/google/generative-ai-go/genai"
+	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
 )
 
-type GeminiClient struct {
+type GoogleGenAIClient struct {
 	//opts []option.RequestOption
 
-	client *googGenAI.Client
+	client *genai.Client
 
 	model string
 
 	logger *slog.Logger
 }
 
-type GeminiClientOpts struct {
+type GoogleGenAIClientOpts struct {
 	Logger *slog.Logger
 	Model  *types.Model
 }
 
-func NewClient(ctx context.Context, opts *GeminiClientOpts) (*GeminiClient, error) {
-	client, err := googGenAI.NewClient(ctx, option.WithAPIKey(os.Getenv("GEMINI_API_KEY")))
+func NewClient(ctx context.Context, opts *GoogleGenAIClientOpts) (*GoogleGenAIClient, error) {
+	client, err := genai.NewClient(ctx, option.WithAPIKey(os.Getenv("GEMINI_API_KEY")))
 	if err != nil {
 		return nil, err
 	}
 
-	return &GeminiClient{
+	return &GoogleGenAIClient{
 		client: client,
 		model:  opts.Model.ID,
 		logger: opts.Logger,
 	}, nil
 }
 
-func (c *GeminiClient) Done() {
+func (c *GoogleGenAIClient) Done() {
 	c.client.Close()
 }
 
@@ -60,8 +60,8 @@ func (c *GeminiClient) Done() {
 //}, nil
 //}
 
-func (c *GeminiClient) Chat(ctx context.Context, req *ChatRequest) (ChatResponse, error) {
-	// TODO - need to handle adding to Gemini history
+func (c *GoogleGenAIClient) Chat(ctx context.Context, req *ChatRequest) (ChatResponse, error) {
+	// TODO - need to handle adding to history
 	//geminiMessages := []*googGenAI.Content{
 	//{
 	//Parts: []googGenAI.Part{
@@ -77,13 +77,13 @@ func (c *GeminiClient) Chat(ctx context.Context, req *ChatRequest) (ChatResponse
 
 	model := c.client.GenerativeModel(req.Model)
 	cs := model.StartChat()
-	res, err := cs.SendMessage(ctx, googGenAI.Text(req.Messages[0].Content))
+	res, err := cs.SendMessage(ctx, genai.Text(req.Messages[0].Content))
 	if err != nil {
 		panic(err)
 	}
 
 	// big hack, gross
-	content, ok := res.Candidates[0].Content.Parts[0].(googGenAI.Text)
+	content, ok := res.Candidates[0].Content.Parts[0].(genai.Text)
 	if !ok {
 		panic("not ok")
 	}

@@ -1,4 +1,4 @@
-package openai
+package googlegenai
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"log/slog"
 
 	"github.com/agent-api/core/types"
-	"github.com/agent-api/gemini/client"
-	"github.com/agent-api/gemini/models"
+	"github.com/agent-api/googlegenai/client"
+	"github.com/agent-api/googlegenai/models"
 )
 
-// Provider implements the LLMProvider interface for Gemini
+// Provider implements the LLMProvider interface for Google Gen AI
 type Provider struct {
 	host string
 	port int
@@ -18,7 +18,7 @@ type Provider struct {
 	model *types.Model
 
 	// client is the internal Ollama HTTP client
-	client *client.GeminiClient
+	client *client.GoogleGenAIClient
 
 	logger slog.Logger
 }
@@ -34,9 +34,9 @@ type ProviderOpts struct {
 // NewProvider creates a new Ollama provider
 func NewProvider(opts *ProviderOpts) *Provider {
 	ctx := context.Background()
-	opts.Logger.Info("Creating new Gemini provider")
+	opts.Logger.Info("creating a new google generative ai provider")
 
-	client, err := client.NewClient(ctx, &client.GeminiClientOpts{
+	client, err := client.NewClient(ctx, &client.GoogleGenAIClientOpts{
 		Model:  models.GEMINI_1_5_FLASH,
 		Logger: opts.Logger,
 	})

@@ -1,7 +1,7 @@
-# Gemini `agent-api` provider
+# Google Generative AI `agent-api` provider
 
-The Gemini provider for `agent-api`
+The Google Generative AI provider for `agent-api` (Google AI studio)
 
 ---
 
-👷🏗️ The Gemini provider is a work in progress and the API may change unexpectedly.
+👷🏗️ The Google Generative AI provider is a work in progress and the API may change unexpectedly.
