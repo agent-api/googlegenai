@@ -2,12 +2,14 @@ package client
 
 import (
 	"context"
-	"log/slog"
+	"encoding/json"
+	"fmt"
 	"os"
 
-	"github.com/agent-api/core/types"
-
+	"github.com/agent-api/core"
+	"github.com/go-logr/logr"
 	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -18,12 +20,12 @@ type GoogleGenAIClient struct {
 
 	model string
 
-	logger *slog.Logger
+	logger *logr.Logger
 }
 
 type GoogleGenAIClientOpts struct {
-	Logger *slog.Logger
-	Model  *types.Model
+	Logger *logr.Logger
+	Model  *core.Model
 }
 
 func NewClient(ctx context.Context, opts *GoogleGenAIClientOpts) (*GoogleGenAIClient, error) {
@@ -43,41 +45,60 @@ func (c *GoogleGenAIClient) Done() {
 	c.client.Close()
 }
 
-// Convert your Tool to OpenAI's ChatCompletionToolParam
-//func ToOpenAIToolParam(t *types.Tool) (*openai.ChatCompletionToolParam, error) {
-//var schemaMap map[string]interface{}
-//if err := json.Unmarshal(t.JSONSchema, &schemaMap); err != nil {
-//return nil, err
-//}
-
-//return &openai.ChatCompletionToolParam{
-//Type: openai.F(openai.ChatCompletionToolTypeFunction),
-//Function: openai.F(openai.FunctionDefinitionParam{
-//Name:        openai.String(t.Name),
-//Description: openai.String(t.Description),
-//Parameters:  openai.F(openai.FunctionParameters(schemaMap)),
-//}),
-//}, nil
-//}
-
 func (c *GoogleGenAIClient) Chat(ctx context.Context, req *ChatRequest) (ChatResponse, error) {
-	// TODO - need to handle adding to history
-	//geminiMessages := []*googGenAI.Content{
-	//{
-	//Parts: []googGenAI.Part{
-	//googGenAI.Text(req.Messages[0].Content),
-	//},
-	//Role: "user",
-	//},
-	//}
+	tools := []*genai.Tool{}
+	for _, tool := range req.Tools {
+		// since the agent-api core's tool params are a slice of bytes and ASSUMED
+		// to be valid JSON schema: attempt to unmarshal wholesale
+		schema := &genai.Schema{}
+		err := json.Unmarshal(tool.JSONSchema, schema)
+		if err != nil {
+			panic(err)
+		}
 
-	// TODO - need to handle multiple messages
-
-	// TODO - need to handle tools
+		tools = append(tools, &genai.Tool{
+			FunctionDeclarations: []*genai.FunctionDeclaration{
+				{
+					Name:        tool.Name,
+					Description: tool.Description,
+					Parameters:  schema,
+				},
+			},
+		})
+	}
 
 	model := c.client.GenerativeModel(req.Model)
+	model.Tools = tools
+
+	history := []*genai.Content{}
+	message := ""
+	for i, m := range req.Messages {
+		if i == len(req.Messages)-1 {
+			message = m.Content
+			continue
+		}
+
+		role := ""
+		switch m.Role {
+		case core.UserMessageRole:
+			role = "user"
+
+		case core.AssistantMessageRole:
+			role = "model"
+		}
+
+		history = append(history, &genai.Content{
+			Parts: []genai.Part{
+				genai.Text(m.Content),
+			},
+			Role: role,
+		})
+	}
+
 	cs := model.StartChat()
-	res, err := cs.SendMessage(ctx, genai.Text(req.Messages[0].Content))
+	cs.History = history
+
+	res, err := cs.SendMessage(ctx, genai.Text(message))
 	if err != nil {
 		panic(err)
 	}
@@ -89,9 +110,53 @@ func (c *GoogleGenAIClient) Chat(ctx context.Context, req *ChatRequest) (ChatRes
 	}
 
 	return ChatResponse{
-		Message: types.Message{
+		Message: core.Message{
 			Content: string(content),
 		},
 	}, nil
+}
 
+func (c *GoogleGenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<-chan *core.Message, <-chan string, <-chan error) {
+	c.logger.V(1).Info("received chat stream message request")
+
+	// TODO - need to handle more messages
+
+	// TODO - handle tools
+
+	msgChan := make(chan *core.Message)
+	deltaChan := make(chan string)
+	errChan := make(chan error, 1)
+
+	c.logger.V(1).Info("kicking async go func for chat stream")
+
+	model := c.client.GenerativeModel(req.Model)
+	cs := model.StartChat()
+
+	go func() {
+		defer close(msgChan)
+		defer close(deltaChan)
+		defer close(errChan)
+
+		iter := cs.SendMessageStream(ctx, genai.Text(req.Messages[0].Content))
+		for {
+			resp, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				errChan <- fmt.Errorf("google gen ai streaming iterator error: %w", err)
+			}
+
+			delta, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+			if !ok {
+				panic("not ok")
+			}
+
+			deltaChan <- string(delta)
+
+			// TODO - need to accumulate deltas for message
+		}
+	}()
+
+	return msgChan, deltaChan, errChan
 }

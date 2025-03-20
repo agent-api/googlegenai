@@ -1,16 +1,16 @@
 package client
 
-import "github.com/agent-api/core/types"
+import "github.com/agent-api/core"
 
 // ChatRequest represents a request to the chat endpoint
 type ChatRequest struct {
 	Model    string
-	Messages []*types.Message
-	Tools    []*types.Tool
+	Messages []*core.Message
+	Tools    []*core.Tool
 }
 
 // ChatResponse represents a response from the chat endpoint
 type ChatResponse struct {
-	Message types.Message
+	Message core.Message
 	Model   string
 }
