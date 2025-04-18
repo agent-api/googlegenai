@@ -160,3 +160,18 @@ func (c *GoogleGenAIClient) ChatStream(ctx context.Context, req *ChatRequest) (<
 
 	return msgChan, deltaChan, errChan
 }
+
+func (c *GoogleGenAIClient) Vector(ctx context.Context, content string) (*core.Embedding, error) {
+	em := c.client.EmbeddingModel("embedding-001")
+	res, err := em.EmbedContent(ctx, genai.Text(content))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &core.Embedding{
+		ID:      "woof",
+		Vector:  res.Embedding.Values,
+		Content: content,
+	}, nil
+}
